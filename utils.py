@@ -3,10 +3,10 @@ import numpy.typing as npt
 from typing import Iterable, Iterator, Any, TypeVar
 import galois
 import itertools
-import typeguard
 import heapq
 
 MATRIX_ELEMS: {str} = {'0', '1', '\n', ' '}
+
 
 def string_to_matrix(s: str) -> [[int]]:
     assert all(c in MATRIX_ELEMS for c in s), "String must only contain 1s, 0s and whitespace"
@@ -24,12 +24,13 @@ def compare_rows(a: Iterable[int], b: Iterable[int]) -> int:
         return -1
     return np.argmax(a) - np.argmax(b)
 
+
 def is_row_echelon_form(matrix: Iterable[Iterable[int]]) -> bool:
     if len(matrix) < 2:
         return True
     return np.all([compare_rows(lhs, rhs) <= 0 for lhs, rhs in zip(matrix[:-1], matrix[1:])])
 
-@typeguard.typechecked
+
 def row_echelon_form(matrix: npt.ArrayLike) -> np.ndarray:
     '''
     Make a "stairy" matrix via gaussian elimination. Actually, this function builds *reduced* row echelon form (a.k.a. row canonical form) - and it is unique!
