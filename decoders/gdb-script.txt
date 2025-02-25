@@ -1,0 +1,6 @@
+dir include
+dir src
+dir test
+
+tui enable
+list test-a.cc:1

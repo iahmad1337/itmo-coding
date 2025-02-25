@@ -119,20 +119,20 @@ TEST(TestMatrix, TestSwap) {
     };
     for (const auto& m : ms) {
         auto g = FromString(m.m, m.rows, m.columns);
-        const auto msf = g.GetMinimalSpanForm();
+        auto msf = g.GetMinimalSpanForm();
         std::cout << "g=\n" << ToString(g) << std::endl;
         std::cout << "msf(g)=\n" << ToString(msf) << std::endl;
 
         // forall i: begin(i) < begin(i + 1)
         for (int i = 0; i + 1 < g.rows; i++) {
-            EXPECT_LT(g.getRow(i).first_one(), g.getRow(i + 1).first_one());
+            EXPECT_LT(msf.getRow(i).first_one(), msf.getRow(i + 1).first_one());
         }
 
         // forall i != j: end(i) != end(j)
         for (int i = 0; i < g.rows; i++) {
             for (int j = 0; j < g.rows; j++) {
                 if (i != j) {
-                    EXPECT_NE(g.getRow(i).last_one(), g.getRow(j).last_one());
+                    EXPECT_NE(msf.getRow(i).last_one(), msf.getRow(j).last_one());
                 }
             }
         }

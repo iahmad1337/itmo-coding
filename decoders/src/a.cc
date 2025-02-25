@@ -1,5 +1,11 @@
 #include <vector>
 #include <cassert>
+#include <cstdint>
+#include <optional>
+
+#if defined(__x86_64__)
+#include <x86intrin.h>
+#endif
 
 // TODO: using vector = small_vector<u64, 64>; // 64 bytes inplace-storage
 
@@ -203,9 +209,11 @@ struct BitMatrix {
                 row_with_one++;
             }
             if (row_with_one != rows) {
-                assert(row <= row_with_one && row_with_one < rows);
-                this->swap(row, row_with_one);
+                continue;
             }
+
+            assert(row <= row_with_one && row_with_one < rows);
+            this->swap(row, row_with_one);
 
             for (u64 lower_row = row + 1; lower_row < rows; lower_row++) {
                 if (get(lower_row, col)) {
@@ -213,15 +221,17 @@ struct BitMatrix {
                     assert(!get(lower_row, col));
                 }
             }
+            row++;
         }  // Post: forall i: begin(i) < begin(i + 1)
 
-        for (u64 row = rows - 1; row != -1; row--) {
-            // Invariant:
+        // Now, make ends different
+        for (u64 row = rows - 1;; row--) {
             auto last_one = getRow(row).last_one();
             assert (bool(last_one));
             for (u64 upper_row = 0; upper_row < row; upper_row++) {
-                getRow(upper_row) ^= getRow(row);
+                if (get(upper_row, *last_one)) getRow(upper_row) ^= getRow(row);
             }  // Post: forall i != row: G[i][end(row)] == 0
+            if (row == 0)  break;
         }  // Post: forall i != j: end(i) != end(j)
     }
 
