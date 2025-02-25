@@ -116,6 +116,15 @@ TEST(TestMatrix, TestSwap) {
             )",
             3, 5
         },
+        {
+            R"(
+            11110110
+            01101101
+            10100100
+            01001001
+            )",
+            4, 8
+        },
     };
     for (const auto& m : ms) {
         auto g = FromString(m.m, m.rows, m.columns);

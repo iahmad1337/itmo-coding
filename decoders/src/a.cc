@@ -208,7 +208,7 @@ struct BitMatrix {
             while (row_with_one < rows && !get(row_with_one, col)) {
                 row_with_one++;
             }
-            if (row_with_one != rows) {
+            if (row_with_one == rows) {
                 continue;
             }
 
