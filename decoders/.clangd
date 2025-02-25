@@ -1,0 +1,7 @@
+CompileFlags:
+  Add: [
+    -std=c++17,
+    -I/home/a.ibrahim/personal/itmo-coding/decoders/include,
+    ]
+  Compiler: gcc
+
