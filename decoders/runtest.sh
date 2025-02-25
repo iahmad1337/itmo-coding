@@ -22,7 +22,7 @@ test_bin() {
 
 (
     cd build
-    cmake --build .
+    cmake --build . || err "Build failed!"
 
     test_bin test-a
 ) && echo SUCCESS || echo FAILURE

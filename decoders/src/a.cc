@@ -2,6 +2,8 @@
 #include <cassert>
 #include <cstdint>
 #include <optional>
+#include <limits>
+#include <iostream>
 
 #if defined(__x86_64__)
 #include <x86intrin.h>
@@ -241,8 +243,95 @@ struct BitMatrix {
     std::vector<u64> storage;
 };
 
+/*******************************************************************************
+*                                   Trellis                                   *
+*******************************************************************************/
+
+constexpr inline u64 NIL = std::numeric_limits<u64>::max();
+constexpr inline double INFTY = std::numeric_limits<double>::infinity();
+
+struct Trellis {
+    /// Node is mutable and so should be restored on every iteration
+    struct Node {
+        struct EdgePair {
+            union {
+                u64 to[2];
+                struct { u64 to0; u64 to1; };
+            };
+        };
+
+        EdgePair edges;
+        /**************************
+        *  Backtracking support  *
+        **************************/
+        u64 from;       /// number of node in previous layer
+        double metric;  /// best metric that we have encountered
+
+        [[nodiscard]] static Node empty() {
+            return Node{
+                {NIL, NIL},
+                NIL,
+                INFTY,
+            };
+        }
+    };
+    using Layer = std::vector<Node>;
+
+    /// Build a minimal trellis
+    [[nodiscard]] static Trellis FromMSF(const BitMatrix& m) {
+        const u64 N = m.columns;
+        const u64 K = m.rows;
+
+        Trellis t;  // result
+
+        t.layers.reserve(N + 1);
+
+        // Layer 0
+        t.layers.push_back(Layer{Node::empty()});
+
+        // Calculate begin(row) & end(row)
+        struct ActiveRange {
+            u64 b;  // location of first 1 in row
+            u64 e;  // location of last 1 in row
+        };
+        std::vector<ActiveRange> activeRange;
+        activeRange.reserve(m.rows);
+        for (u64 row_idx = 0; row_idx < m.rows; row_idx++) {
+            auto rowSpan = const_cast<BitMatrix&>(m).getRow(row_idx);
+            activeRange.push_back(
+                ActiveRange{
+                    /* b = */ *rowSpan.first_one(),
+                    /* e = */ *rowSpan.last_one(),
+                }
+            );
+        }
+
+        // Layers 1..n-1
+        for (u64 layer_idx = 1; layer_idx <= N; layer_idx++) {
+        }
+
+        // Layer n (past-the-end) should we really do this?
+
+        return t;
+    }
+
+    BitVector Decode(const std::vector<double>& y) {
+        // 1. Initialize trellis (from = NIL, metric = infty) TODO: infty or -infty?
+    }
+
+    Trellis FromGeneratorMatrix(const BitMatrix& m) {
+        return FromMSF(m.GetMinimalSpanForm());
+    }
+
+
+
+    std::vector<Layer> layers;
+};
+
 #ifndef TEST
 int main() {
+    std::ios_base::sync_with_stdio(false);
+    std::cin.tie(nullptr);
 
     return 0;
 }
