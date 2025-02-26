@@ -4,6 +4,9 @@
 #include <optional>
 #include <limits>
 #include <iostream>
+#include <algorithm>
+#include <random>
+#include <cmath>
 
 #if defined(__x86_64__)
 #include <x86intrin.h>
@@ -11,14 +14,30 @@
 
 // TODO: using vector = small_vector<u64, 64>; // 64 bytes inplace-storage
 
+#ifdef TEST
+#define debug(action) { action; }
+#else
+#define debug(action) {}
+#endif
+
+using std::endl;
+using std::cin;
+using std::cout;
+
 using i32 = int32_t;
 using i64 = int64_t;
 using u32 = uint32_t;
 using u64 = uint64_t;
 
+#define all(x) (x).begin(), (x).end()
+
 #define SUB(i) ((i) & 0x3f)
 #define UPP(i) ((i) / 64)
 #define BIT(i) (1ull << (i))
+
+void TODO(std::string message) {
+    throw std::runtime_error("Not Implemented: " + message);
+}
 
 /// Get position of first set bit (a.k.a. NLZ)
 std::optional<int> bsf(u64 limb) {
@@ -244,6 +263,35 @@ struct BitMatrix {
 };
 
 /*******************************************************************************
+*                                  Debugging                                  *
+*******************************************************************************/
+
+template<class T>
+std::ostream& operator<<(std::ostream& os, const std::vector<T>& v) {
+    os << "{";
+    bool first = true;
+    for (auto& x : v) {
+        if (first) {
+            os << x;
+        } else {
+            os << ", " << x;
+        }
+        first = false;
+    }
+    os << "}";
+    return os;
+}
+
+std::ostream& operator<<(std::ostream& os, const BitSpan& span) {
+    os << "BitSpan(bits=" << span.bits << "){";
+    for (u64 i = 0; i < span.bits; i++) {
+        os << span.get(i);
+    }
+    os << "}";
+    return os;
+}
+
+/*******************************************************************************
 *                                   Trellis                                   *
 *******************************************************************************/
 
@@ -253,41 +301,47 @@ constexpr inline double INFTY = std::numeric_limits<double>::infinity();
 struct Trellis {
     /// Node is mutable and so should be restored on every iteration
     struct Node {
-        struct EdgePair {
-            union {
-                u64 to[2];
-                struct { u64 to0; u64 to1; };
-            };
-        };
-
-        EdgePair edges;
-        /**************************
-        *  Backtracking support  *
-        **************************/
-        u64 from;       /// number of node in previous layer
-        double metric;  /// best metric that we have encountered
+        u64 from[2];           /// from which nodes we came from
+        bool parent_label_dp;  /// [backtracking] label of edge, from which we arived
+        double metric_dp;      /// [backtracking] best metric that we have encountered
 
         [[nodiscard]] static Node empty() {
             return Node{
                 {NIL, NIL},
-                NIL,
+                false,
                 INFTY,
             };
         }
     };
-    using Layer = std::vector<Node>;
 
-    /// Build a minimal trellis
-    [[nodiscard]] static Trellis FromMSF(const BitMatrix& m) {
+    struct Layer {
+        std::vector<Node> nodes;
+        std::vector<u64> activeRows;
+        std::unordered_map<u64, u64> activeRowToIdx;
+
+        [[nodiscard]] static Layer FromActiveRows(std::vector<u64>&& activeRows) {
+            std::unordered_map<u64, u64> activeRowToIdx;
+            for (u64 i = 0; i < activeRows.size(); i++) {
+                activeRowToIdx[activeRows[i]] = i;
+            }
+            return Layer{
+                std::vector<Node>((1ull << activeRows.size()), Node::empty()),
+                std::move(activeRows),
+                std::move(activeRowToIdx)
+            };
+        }
+    };
+
+    static std::vector<Layer> GetUninitializedLayersFromMSF(const BitMatrix& m) {
         const u64 N = m.columns;
         const u64 K = m.rows;
 
-        Trellis t;  // result
+        std::vector<Layer> layers;
 
-        t.layers.reserve(N + 1);
+        layers.reserve(N + 1);
 
-        // Layer 0
-        t.layers.push_back(Layer{Node::empty()});
+        // Dummy layer on start
+        layers.emplace_back(Layer::FromActiveRows({}));
 
         // Calculate begin(row) & end(row)
         struct ActiveRange {
@@ -306,26 +360,194 @@ struct Trellis {
             );
         }
 
-        // Layers 1..n-1
-        for (u64 layer_idx = 1; layer_idx <= N; layer_idx++) {
+        for (u64 layer_idx = 0; layer_idx < N; layer_idx++) {
+            std::vector<u64> activeRows;
+            for (u64 row = 0; row < activeRange.size(); row++) {
+                if (activeRange[row].b <= layer_idx && layer_idx < activeRange[row].e) {
+                    activeRows.push_back(row);
+                }
+            }
+            assert(std::is_sorted(activeRows.begin(), activeRows.end()));
+            layers.emplace_back(
+                Layer::FromActiveRows(std::move(activeRows))
+            );
         }
 
-        // Layer n (past-the-end) should we really do this?
+        return layers;
+    }
+
+    /// Build a minimal trellis
+    [[nodiscard]] static Trellis FromMSF(const BitMatrix& m) {
+        const u64 N = m.columns;
+        const u64 K = m.rows;
+
+        Trellis t{m, {}};  // result
+
+        // 1. Build trellis, but without any edges yet - "disjoint trellis"
+        t.layers = GetUninitializedLayersFromMSF(m);
+
+        // 2. Connect nodes with edges
+        std::vector<u64> union_;  // union of active rows between layers
+        for (u64 col = 0; col < N; col++) {
+            // Invariant: trellis is built up until layers[col]
+            union_.resize(m.rows);
+            auto it = std::set_union(
+                all(t.layers[col].activeRows),
+                all(t.layers[col + 1].activeRows),
+                union_.begin()
+            );
+            union_.resize(it - union_.begin());
+
+            // scalar product calculated for edge label
+            BitVector w{union_.size()};
+            BitVector x{union_.size()};
+
+            // Fill up `w` with matrix values
+            for (u64 active_row_idx = 0; active_row_idx < union_.size(); active_row_idx++) {
+                BitSpan(x).set(active_row_idx, m.get(union_[active_row_idx], col));
+            }
+
+            for (u64 node_idx = 0; node_idx < t.layers[col].nodes.size(); node_idx++) {
+                u64 destination_idx = 0;
+                for (u64 active_row_idx = 0; active_row_idx < t.layers[col].activeRows.size(); active_row_idx++) {
+                    bool isActiveRowSet = (node_idx & BIT(active_row_idx)) != 0;
+                    // store union of active rows into `w`
+                    BitSpan(w).set(active_row_idx, isActiveRowSet);
+                    // build common part of destination_idx
+                    auto& prevLayer = t.layers[col];
+                    auto& nextLayer = t.layers[col + 1];
+                    if (
+                        auto it = nextLayer.activeRowToIdx.find(prevLayer.activeRows[active_row_idx]);
+                        it != nextLayer.activeRowToIdx.end()
+                    ) {
+                        // it->second == position of the active row in the next
+                        // layer
+                        destination_idx |= BIT(it->second) * isActiveRowSet;
+                    }
+                }
+
+                if (union_.size() > t.layers[col].activeRows.size()) {
+                    // I) a new row has been activated (exactly 1!!!)
+                    // now there are two possible values of `w`
+                    // II) a bit should be added to destination_idx
+                    for (u64 new_row_bit : {0, 1}) {
+                        BitSpan(w).set(w.bits - 1, new_row_bit);
+                        debug(
+                            std::cout
+                            << "t.layers[col+1].nodes.size=" << t.layers[col+1].nodes.size() << endl
+                            << "destination_idx=" << destination_idx << endl
+                            << "union_=" << union_ << endl
+                        )
+                        auto& node = t.layers[col + 1].nodes[
+                            destination_idx | BIT(t.layers[col + 1].activeRowToIdx[union_.back()]) * new_row_bit
+                        ];
+                        debug(std::cout << "ScalarProduct=" << (int)BitSpan::ScalarProduct(w, x) << std::endl)
+                        node.from[(int)BitSpan::ScalarProduct(w, x)] = node_idx;
+                    }
+                } else {
+                    // active rows are the same or even lesser
+                    auto& node = t.layers[col + 1].nodes[destination_idx];
+                    node.from[BitSpan::ScalarProduct(w, x)] = node_idx;
+                }
+            }
+
+            // bits in `intersection`
+        }
 
         return t;
     }
 
-    BitVector Decode(const std::vector<double>& y) {
+    [[nodiscard]] BitVector Decode(const std::vector<double>& y) {
         // 1. Initialize trellis (from = NIL, metric = infty) TODO: infty or -infty?
+        for (auto& layer : layers) {
+            for (auto& node : layer.nodes) {
+                node.metric_dp = INFTY;
+            }
+        }
+
+        assert(layers[0].nodes.size() == 1);
+
+        // 2. Do the DP
+        layers[0].nodes[0].metric_dp = 0;
+        for (u64 layer_idx = 1; layer_idx < layers.size(); layer_idx++) {
+            auto& pl = layers[layer_idx - 1];
+            auto& cl = layers[layer_idx];
+
+            for (auto& node : cl.nodes) {
+                for (int from : {0, 1}) {
+                    if (node.from[from] == NIL) continue;
+
+                    auto& parent = pl.nodes[node.from[from]];
+                    constexpr static double TO_SIGNAL[2] = {1, -1};
+                    double suggestedMetric = parent.metric_dp + std::pow(TO_SIGNAL[from] - y[layer_idx - 1], 2);
+
+                    if (suggestedMetric < node.metric_dp) {
+                        node.metric_dp = suggestedMetric;
+                        node.parent_label_dp = from;
+                    }
+                }
+            }
+        }
+
+        // 3. Backtrack the answer
+        BitVector answer(msf.columns);
+        for (u64 layer_idx = layers.size() - 1, node_idx = 0; layer_idx != 0; layer_idx--) {
+            auto& cl = layers[layer_idx];
+            auto& pl = layers[layer_idx - 1];
+
+            int label = cl.nodes[node_idx].parent_label_dp;
+
+            BitSpan(answer).set(layer_idx, label);
+            node_idx = cl.nodes[node_idx].from[label];
+        }
+
+        return answer;
     }
 
-    Trellis FromGeneratorMatrix(const BitMatrix& m) {
+    [[nodiscard]] static Trellis FromGeneratorMatrix(const BitMatrix& m) {
         return FromMSF(m.GetMinimalSpanForm());
     }
 
+    std::vector<u64> GetComplexityProfile() {
+        std::vector<u64> profile;
+        profile.reserve(layers.size());
+        for (const auto& layer : layers) {
+            profile.push_back(layer.nodes.size());
+        }
+        return profile;
+    }
 
 
+    const BitMatrix msf;
     std::vector<Layer> layers;
+};
+
+struct Solver {
+
+    [[nodiscard]] static Solver FromGeneratorMatrix(const BitMatrix& g) {
+        return {
+            {},
+            Trellis::FromGeneratorMatrix(g),
+        };
+    }
+
+    [[nodiscard]] double Simulate(double noiseLevel, u64 iterations, u64 maxErrors) {
+        TODO("Solver::Simulate");
+        return 0;
+    }
+
+    [[nodiscard]] BitVector Decode(const std::vector<double>& y) {
+        return trellis.Decode(y);
+    }
+
+    [[nodiscard]] BitVector Encode(const BitVector& x) {
+        TODO("Solver::Encode");
+        return {0};
+    }
+
+
+    std::mt19937_64 rng;
+    Trellis trellis;
 };
 
 #ifndef TEST

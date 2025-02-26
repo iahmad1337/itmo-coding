@@ -92,60 +92,61 @@ std::string ToString(const BitMatrix& m) {
     return ss.str();
 }
 
-TEST(TestMatrix, TestSwap) {
-    struct arg {
-        std::string m;
-        int rows;
-        int columns;
-    };
-    arg ms[] = {
-        {
-            R"(
-            11111111
-            11110000
-            11001100
-            10101010
-            )",
-            4, 8
-        },
-        {
-            R"(
-            11110
-            01101
-            11100
-            )",
-            3, 5
-        },
-        {
-            R"(
-            11110110
-            01101101
-            10100100
-            01001001
-            )",
-            4, 8
-        },
-        {
-            R"(
-            1 1 1 0 1
-            0 0 1 0 0
-            0 1 1 0 1
-            )",
-            3, 5
-        },
-        {
-            R"(
-            10000001
-            01000001
-            00100001
-            00010001
-            00001001
-            00000101
-            00000011
-            )",
-            7, 8
-        },
-    };
+struct arg {
+    std::string m;
+    int rows;
+    int columns;
+};
+arg ms[] = {
+    {
+        R"(
+        11111111
+        11110000
+        11001100
+        10101010
+        )",
+        4, 8
+    },
+    {
+        R"(
+        11110
+        01101
+        11100
+        )",
+        3, 5
+    },
+    {
+        R"(
+        11110110
+        01101101
+        10100100
+        01001001
+        )",
+        4, 8
+    },
+    {
+        R"(
+        1 1 1 0 1
+        0 0 1 0 0
+        0 1 1 0 1
+        )",
+        3, 5
+    },
+    {
+        R"(
+        10000001
+        01000001
+        00100001
+        00010001
+        00001001
+        00000101
+        00000011
+        )",
+        7, 8
+    },
+};
+
+TEST(TestMatrix, TestMSF) {
     for (const auto& m : ms) {
         auto g = FromString(m.m, m.rows, m.columns);
         auto msf = g.GetMinimalSpanForm();
@@ -166,5 +167,16 @@ TEST(TestMatrix, TestSwap) {
             }
         }
     }
+}
 
+TEST(TestMatrix, TestTrellis) {
+    constexpr auto getProfile = [] (arg m) {
+        auto g = FromString(m.m, m.rows, m.columns);
+        auto trellis = Trellis::FromGeneratorMatrix(g);
+        return trellis.GetComplexityProfile();
+    };
+
+    using namespace testing;
+    EXPECT_THAT(getProfile(ms[0]), ElementsAre(1, 2, 4, 8, 4, 8, 4, 2, 1));
+    // TODO: calculate complexity profiles for other matrices
 }
