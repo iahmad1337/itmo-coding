@@ -175,17 +175,24 @@ TEST(TestMatrix, TestMSF) {
     std::stringstream ss;
 
     // Header
+    // To increase spacing between nodes, play around with `pad`, `nodesep` and
+    // `ranksep`
     ss << R"(
         strict digraph {
             graph [
-                rankdir = LR
+                rankdir = LR,
+                pad = "0.5",
+                nodesep = "0.25",
+                ranksep = "1.5"
             ]
     )";
 
+    // graph-level unique node
     constexpr auto toLabel = [](u64 layer, u64 node) {
         return "l" + std::to_string(layer) + "n" + std::to_string(node);
     };
 
+    // layer-level unique node (may repeat between layers)
     constexpr auto toNodeLabel = [](u64 node, u64 activeRowsCount) {
         std::string result;
         result.resize(activeRowsCount, '0');
@@ -207,7 +214,7 @@ TEST(TestMatrix, TestMSF) {
             << "cluster=true;\n"
             << "peripheries=0;\n"
             << "label=\"" << activeRows << "\";\n"
-            << "rankdir=TB;\n";
+            << "rankdir=BT;\n";
 
         // label nodes
         for (u64 node = 0; node < nodes.size(); node++) {
@@ -219,15 +226,28 @@ TEST(TestMatrix, TestMSF) {
         layer++;
     }
 
+    {
+        // Beware - the alignment hack: https://stackoverflow.com/questions/49348639/graphviz-aligning-nodes-and-clusters
+        layer = 1;
+        for (; layer <= t.layers.size(); layer++) {
+            if (layer != 1) ss << ", ";
+            ss << toLabel(layer, 0);
+        }
+        ss << "[group=1];" << endl;
+    }
+
+    // [optional] make edges straight
+    // ss << "splines=false" << endl;
+
     // draw edges
     layer = 1;
     for (const auto& [nodes, activeRows, _] : t.layers) {
         for (u64 node = 0; node < nodes.size(); node++) {
             const auto& n = nodes[node];
             if (n.from[0] != NIL)
-                ss << toLabel(layer - 1, n.from[0]) << " -> " << toLabel(layer, node) << "[label=0,color=blue];\n";
+                ss << toLabel(layer - 1, n.from[0]) << " -> " << toLabel(layer, node) << "[label=0,color=blue,fontcolor=blue];\n";
             if (n.from[1] != NIL)
-                ss << toLabel(layer - 1, n.from[1]) << " -> " << toLabel(layer, node) << "[label=1,color=red];\n";
+                ss << toLabel(layer - 1, n.from[1]) << " -> " << toLabel(layer, node) << "[label=1,color=red,fontcolor=red];\n";
         }
         layer++;
     }

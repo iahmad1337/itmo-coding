@@ -1,0 +1,136 @@
+        strict digraph {
+            graph [
+                rankdir = LR,
+                pad = "0.5",
+                nodesep = "0.25",
+                ranksep = "1.5"
+            ]
+    subgraph Layer1 {
+cluster=true;
+peripheries=0;
+label="{}";
+rankdir=BT;
+l1n0 [label="sentinel"];
+}
+subgraph Layer2 {
+cluster=true;
+peripheries=0;
+label="{0}";
+rankdir=BT;
+l2n0 [label="0"];
+l2n1 [label="1"];
+}
+subgraph Layer3 {
+cluster=true;
+peripheries=0;
+label="{0, 1}";
+rankdir=BT;
+l3n0 [label="00"];
+l3n1 [label="10"];
+l3n2 [label="01"];
+l3n3 [label="11"];
+}
+subgraph Layer4 {
+cluster=true;
+peripheries=0;
+label="{0, 1, 2}";
+rankdir=BT;
+l4n0 [label="000"];
+l4n1 [label="100"];
+l4n2 [label="010"];
+l4n3 [label="110"];
+l4n4 [label="001"];
+l4n5 [label="101"];
+l4n6 [label="011"];
+l4n7 [label="111"];
+}
+subgraph Layer5 {
+cluster=true;
+peripheries=0;
+label="{1, 2}";
+rankdir=BT;
+l5n0 [label="00"];
+l5n1 [label="10"];
+l5n2 [label="01"];
+l5n3 [label="11"];
+}
+subgraph Layer6 {
+cluster=true;
+peripheries=0;
+label="{1, 2, 3}";
+rankdir=BT;
+l6n0 [label="000"];
+l6n1 [label="100"];
+l6n2 [label="010"];
+l6n3 [label="110"];
+l6n4 [label="001"];
+l6n5 [label="101"];
+l6n6 [label="011"];
+l6n7 [label="111"];
+}
+subgraph Layer7 {
+cluster=true;
+peripheries=0;
+label="{1, 3}";
+rankdir=BT;
+l7n0 [label="00"];
+l7n1 [label="10"];
+l7n2 [label="01"];
+l7n3 [label="11"];
+}
+subgraph Layer8 {
+cluster=true;
+peripheries=0;
+label="{3}";
+rankdir=BT;
+l8n0 [label="0"];
+l8n1 [label="1"];
+}
+subgraph Layer9 {
+cluster=true;
+peripheries=0;
+label="{}";
+rankdir=BT;
+l9n0 [label="sentinel"];
+}
+l1n0, l2n0, l3n0, l4n0, l5n0, l6n0, l7n0, l8n0, l9n0[group=1];
+splines=false
+l1n0 -> l2n0[label=0,color=blue,fontcolor=blue];
+l1n0 -> l2n1[label=1,color=red,fontcolor=red];
+l2n0 -> l3n0[label=0,color=blue,fontcolor=blue];
+l2n1 -> l3n1[label=1,color=red,fontcolor=red];
+l2n0 -> l3n2[label=1,color=red,fontcolor=red];
+l2n1 -> l3n3[label=1,color=red,fontcolor=red];
+l3n0 -> l4n0[label=0,color=blue,fontcolor=blue];
+l3n1 -> l4n1[label=1,color=red,fontcolor=red];
+l3n2 -> l4n2[label=0,color=blue,fontcolor=blue];
+l3n3 -> l4n3[label=1,color=red,fontcolor=red];
+l3n0 -> l4n4[label=1,color=red,fontcolor=red];
+l3n1 -> l4n5[label=1,color=red,fontcolor=red];
+l3n2 -> l4n6[label=1,color=red,fontcolor=red];
+l3n3 -> l4n7[label=1,color=red,fontcolor=red];
+l4n0 -> l5n0[label=0,color=blue,fontcolor=blue];
+l4n1 -> l5n0[label=1,color=red,fontcolor=red];
+l4n3 -> l5n1[label=1,color=red,fontcolor=red];
+l4n5 -> l5n2[label=1,color=red,fontcolor=red];
+l4n7 -> l5n3[label=1,color=red,fontcolor=red];
+l5n0 -> l6n0[label=0,color=blue,fontcolor=blue];
+l5n1 -> l6n1[label=1,color=red,fontcolor=red];
+l5n2 -> l6n2[label=1,color=red,fontcolor=red];
+l5n3 -> l6n3[label=1,color=red,fontcolor=red];
+l5n0 -> l6n4[label=1,color=red,fontcolor=red];
+l5n1 -> l6n5[label=1,color=red,fontcolor=red];
+l5n2 -> l6n6[label=1,color=red,fontcolor=red];
+l5n3 -> l6n7[label=1,color=red,fontcolor=red];
+l6n0 -> l7n0[label=0,color=blue,fontcolor=blue];
+l6n2 -> l7n0[label=1,color=red,fontcolor=red];
+l6n1 -> l7n1[label=0,color=blue,fontcolor=blue];
+l6n3 -> l7n1[label=1,color=red,fontcolor=red];
+l6n6 -> l7n2[label=1,color=red,fontcolor=red];
+l6n7 -> l7n3[label=1,color=red,fontcolor=red];
+l7n0 -> l8n0[label=0,color=blue,fontcolor=blue];
+l7n1 -> l8n0[label=1,color=red,fontcolor=red];
+l7n3 -> l8n1[label=1,color=red,fontcolor=red];
+l8n0 -> l9n0[label=0,color=blue,fontcolor=blue];
+l8n1 -> l9n0[label=1,color=red,fontcolor=red];
+}
