@@ -309,14 +309,16 @@ constexpr inline double INFTY = std::numeric_limits<double>::infinity();
 struct Trellis {
     /// Node is mutable and so should be restored on every iteration
     struct Node {
-        u64 from[2];           /// from which nodes we came from
+        u64 to[2];
         bool parent_label_dp;  /// [backtracking] label of edge, from which we arived
+        u64 parent_idx;        /// [backtracking] index of parent in prev layer
         double metric_dp;      /// [backtracking] best metric that we have encountered
 
         [[nodiscard]] static Node empty() {
             return Node{
                 {NIL, NIL},
                 false,
+                NIL,
                 INFTY,
             };
         }
@@ -448,16 +450,15 @@ struct Trellis {
                             << "destination_idx=" << destination_idx << endl
                             << "union_=" << union_ << endl
                         )
-                        auto& node = t.layers[col + 1].nodes[
-                            destination_idx | BIT(t.layers[col + 1].activeRowToIdx[union_.back()]) * new_row_bit
-                        ];
+                        auto& node = t.layers[col].nodes[node_idx];
+                        node.to[(int)BitSpan::ScalarProduct(w, x)] =
+                            destination_idx | BIT(t.layers[col + 1].activeRowToIdx[union_.back()]) * new_row_bit;
                         debug(std::cout << "ScalarProduct=" << (int)BitSpan::ScalarProduct(w, x) << std::endl)
-                        node.from[(int)BitSpan::ScalarProduct(w, x)] = node_idx;
                     }
                 } else {
                     // active rows are the same or even lesser
-                    auto& node = t.layers[col + 1].nodes[destination_idx];
-                    node.from[BitSpan::ScalarProduct(w, x)] = node_idx;
+                    auto& node = t.layers[col].nodes[node_idx];
+                    node.to[BitSpan::ScalarProduct(w, x)] = destination_idx;
                 }
             }
 
@@ -479,22 +480,24 @@ struct Trellis {
 
         // 2. Do the DP
         layers[0].nodes[0].metric_dp = 0;
-        for (u64 layer_idx = 1; layer_idx < layers.size(); layer_idx++) {
-            auto& pl = layers[layer_idx - 1];
-            auto& cl = layers[layer_idx];
+        for (u64 layer_idx = 0; layer_idx + 1 < layers.size(); layer_idx++) {
+            auto& curLayer = layers[layer_idx];
+            auto& nextLayer = layers[layer_idx + 1];
 
-            for (auto& node : cl.nodes) {
-                for (int from : {0, 1}) {
-                    if (node.from[from] == NIL) continue;
+            for (u64 node_idx = 0; node_idx < curLayer.nodes.size(); node_idx++) {
+                auto& node = curLayer.nodes[node_idx];
+                for (int to : {0, 1}) {
+                    if (node.to[to] == NIL) continue;
 
-                    auto& parent = pl.nodes[node.from[from]];
+                    auto& son = nextLayer.nodes[node.to[to]];
                     constexpr static double TO_SIGNAL[2] = {1, -1};
-                    auto difference = TO_SIGNAL[from] - y[layer_idx - 1];
-                    double suggestedMetric = parent.metric_dp + difference * difference;
+                    auto difference = TO_SIGNAL[to] - y[layer_idx];
+                    double suggestedMetric = node.metric_dp + difference * difference;
 
-                    if (suggestedMetric < node.metric_dp) {
-                        node.metric_dp = suggestedMetric;
-                        node.parent_label_dp = from;
+                    if (suggestedMetric < son.metric_dp) {
+                        son.metric_dp = suggestedMetric;
+                        son.parent_idx = node_idx;
+                        son.parent_label_dp = to;
                     }
                 }
             }
@@ -503,13 +506,9 @@ struct Trellis {
         // 3. Backtrack the answer
         BitVector answer(msf.columns);
         for (u64 layer_idx = layers.size() - 1, node_idx = 0; layer_idx != 0; layer_idx--) {
-            auto& cl = layers[layer_idx];
-            auto& pl = layers[layer_idx - 1];
-
-            int label = cl.nodes[node_idx].parent_label_dp;
-
-            BitSpan(answer).set(layer_idx - 1, label);
-            node_idx = cl.nodes[node_idx].from[label];
+            auto& node = layers[layer_idx].nodes[node_idx];
+            BitSpan(answer).set(layer_idx - 1, node.parent_label_dp);
+            node_idx = node.parent_idx;
         }
 
         return answer;

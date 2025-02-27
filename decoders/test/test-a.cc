@@ -244,10 +244,10 @@ TEST(TestMatrix, TestMSF) {
     for (const auto& [nodes, activeRows, _] : t.layers) {
         for (u64 node = 0; node < nodes.size(); node++) {
             const auto& n = nodes[node];
-            if (n.from[0] != NIL)
-                ss << toLabel(layer - 1, n.from[0]) << " -> " << toLabel(layer, node) << "[label=0,color=blue,fontcolor=blue];\n";
-            if (n.from[1] != NIL)
-                ss << toLabel(layer - 1, n.from[1]) << " -> " << toLabel(layer, node) << "[label=1,color=red,fontcolor=red];\n";
+            if (n.to[0] != NIL)
+                ss << toLabel(layer, node) << " -> " << toLabel(layer + 1, n.to[0]) << "[label=0,color=blue,fontcolor=blue];\n";
+            if (n.to[1] != NIL)
+                ss << toLabel(layer, node) << " -> " << toLabel(layer + 1, n.to[1]) << "[label=1,color=red,fontcolor=red];\n";
         }
         layer++;
     }
@@ -264,9 +264,6 @@ void DisplayTrellis(const Trellis& t) {
     of.close();
 
     system("dot -T png trellis.dot >trellis.png");
-    // Didn't work :(
-    // https://forum.graphviz.org/t/is-there-a-way-to-justify-align-nodes-on-the-same-rank/1494/4
-    // system("dot -Nrankjustify=l -Tdot trellis.dot | gvpr -cf rankJustify.gvpr | neato -n -Tpng >trellis.png");
     system("open trellis.png");
 }
 
@@ -275,7 +272,6 @@ TEST(TestMatrix, TestTrellis) {
         auto g = FromString(m.m, m.rows, m.columns);
         auto trellis = Trellis::FromGeneratorMatrix(g);
         DisplayTrellis(trellis);
-        exit(0);
         return trellis.GetComplexityProfile();
     };
 
