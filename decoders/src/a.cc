@@ -172,7 +172,7 @@ struct BitSpan {
             lit++;
             rit++;
         }
-        return popcnt(result);
+        return popcnt(result) & 1;
     }
 
     u64 *data;
@@ -436,28 +436,29 @@ struct Trellis {
                     }
                 }
 
+                // debug(
+                //     std::cout
+                //     << "destination_idx=" << destination_idx << endl
+                //     << "union_=" << union_ << endl
+                // )
                 if (union_.size() > t.layers[col].activeRows.size()) {
                     assert(union_.size() == t.layers[col].activeRows.size() + 1);
+                    assert(union_.back() == t.layers[col + 1].activeRows.back());
                     // I) a new row has been activated (exactly 1!!!)
                     // now there are two possible values of `w`
                     // II) a bit should be added to destination_idx. By
                     // construction of MSF, it's the last member of `union_`
                     for (u64 new_row_bit : {0, 1}) {
                         BitSpan(w).set(w.bits - 1, new_row_bit);
-                        debug(
-                            std::cout
-                            << "t.layers[col+1].nodes.size=" << t.layers[col+1].nodes.size() << endl
-                            << "destination_idx=" << destination_idx << endl
-                            << "union_=" << union_ << endl
-                        )
                         auto& node = t.layers[col].nodes[node_idx];
+                        debug(std::cout << "w=" << w << "\nx=" << x << "\nw^x=" << BitSpan::ScalarProduct(w, x) << endl)
                         node.to[(int)BitSpan::ScalarProduct(w, x)] =
                             destination_idx | BIT(t.layers[col + 1].activeRowToIdx[union_.back()]) * new_row_bit;
-                        debug(std::cout << "ScalarProduct=" << (int)BitSpan::ScalarProduct(w, x) << std::endl)
                     }
                 } else {
                     // active rows are the same or even lesser
                     auto& node = t.layers[col].nodes[node_idx];
+                    debug(std::cout << "w=" << w << "\nx=" << x << "\nw^x=" << BitSpan::ScalarProduct(w, x) << endl)
                     node.to[BitSpan::ScalarProduct(w, x)] = destination_idx;
                 }
             }

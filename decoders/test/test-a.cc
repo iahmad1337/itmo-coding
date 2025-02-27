@@ -66,6 +66,48 @@ TEST(TestVector, TestBitSpan) {
     EXPECT_EQ(span.last_one(), 200);
 }
 
+BitVector FromString(std::string str) {
+    u64 bits = 0;
+    for (char c : str) {
+        bits += c == '0' || c == '1';
+    }
+    BitVector result(bits);
+    u64 cur = 0;
+    for (char c : str) {
+        bool value = false;
+        if (c == '0') value = false;
+        else if (c == '1') value = true;
+        else continue;
+        BitSpan(result).set(cur, value);
+        cur++;
+    }
+    return result;
+}
+
+class TestScalarProduct : public testing::TestWithParam<std::tuple<std::string, std::string, int>> {};
+
+using TSP = std::tuple<std::string, std::string, int>;
+
+TEST_P(TestScalarProduct, Valid) {
+    auto [x, y, result] = GetParam();
+
+    auto xVec = FromString(x);
+    auto yVec = FromString(y);
+
+    ASSERT_EQ(BitSpan::ScalarProduct(xVec, yVec), result);
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    SomeName,
+    TestScalarProduct,
+    testing::Values(
+        TSP{"101", "101", 0},
+        TSP{"011", "111", 0},
+        TSP{"111", "111", 1}
+    )
+);
+
+
 BitMatrix FromString(std::string str, int rows, int columns) {
     BitMatrix result(rows, columns);
     u64 cur = 0;
@@ -175,8 +217,8 @@ TEST(TestMatrix, TestMSF) {
     std::stringstream ss;
 
     // Header
-    // To increase spacing between nodes, play around with `pad`, `nodesep` and
-    // `ranksep`
+    // To increase/decrease spacing between nodes, play around with `pad`,
+    // `nodesep` and `ranksep`
     ss << R"(
         strict digraph {
             graph [
