@@ -15,6 +15,10 @@
 // TODO: using vector = small_vector<u64, 64>; // 64 bytes inplace-storage
 
 #ifdef TEST
+// automatic backtrace printing
+#include "backward.hpp"
+backward::SignalHandling sh;
+
 #define debug(action) { action; }
 #else
 #define debug(action) {}
@@ -118,11 +122,19 @@ struct BitSpan {
         do {
             it--;
             if (*it != 0) {
-                // TODO: invalid
                 return ((it - cbegin()) * 64 + *bsr(*it));
             }
         } while (it != cbegin());
         return std::nullopt;
+    }
+
+    [[nodiscard]] std::string to_string() const {
+        std::string result;
+        result.resize(bits);
+        for (u64 i = 0; i < bits; i++) {
+            result[i] = get(i) ? '1' : '0';
+        }
+        return result;
     }
 
     [[nodiscard]] u64* begin() const {
@@ -148,10 +160,6 @@ struct BitSpan {
             data[i] ^= other.data[i];
         }
         return *this;
-    }
-
-    [[nodiscard]] BitSpan shrinked(u64 bits) {
-        return BitSpan{data, bits};
     }
 
     [[nodiscard]] static bool ScalarProduct(const BitSpan& lhs, const BitSpan& rhs) {
@@ -427,9 +435,11 @@ struct Trellis {
                 }
 
                 if (union_.size() > t.layers[col].activeRows.size()) {
+                    assert(union_.size() == t.layers[col].activeRows.size() + 1);
                     // I) a new row has been activated (exactly 1!!!)
                     // now there are two possible values of `w`
-                    // II) a bit should be added to destination_idx
+                    // II) a bit should be added to destination_idx. By
+                    // construction of MSF, it's the last member of `union_`
                     for (u64 new_row_bit : {0, 1}) {
                         BitSpan(w).set(w.bits - 1, new_row_bit);
                         debug(
@@ -479,7 +489,8 @@ struct Trellis {
 
                     auto& parent = pl.nodes[node.from[from]];
                     constexpr static double TO_SIGNAL[2] = {1, -1};
-                    double suggestedMetric = parent.metric_dp + std::pow(TO_SIGNAL[from] - y[layer_idx - 1], 2);
+                    auto difference = TO_SIGNAL[from] - y[layer_idx - 1];
+                    double suggestedMetric = parent.metric_dp + difference * difference;
 
                     if (suggestedMetric < node.metric_dp) {
                         node.metric_dp = suggestedMetric;
@@ -497,7 +508,7 @@ struct Trellis {
 
             int label = cl.nodes[node_idx].parent_label_dp;
 
-            BitSpan(answer).set(layer_idx, label);
+            BitSpan(answer).set(layer_idx - 1, label);
             node_idx = cl.nodes[node_idx].from[label];
         }
 
@@ -508,7 +519,7 @@ struct Trellis {
         return FromMSF(m.GetMinimalSpanForm());
     }
 
-    std::vector<u64> GetComplexityProfile() {
+    [[nodiscard]] std::vector<u64> GetComplexityProfile() const {
         std::vector<u64> profile;
         profile.reserve(layers.size());
         for (const auto& layer : layers) {
@@ -526,7 +537,6 @@ struct Solver {
 
     [[nodiscard]] static Solver FromGeneratorMatrix(const BitMatrix& g) {
         return {
-            {},
             Trellis::FromGeneratorMatrix(g),
         };
     }
@@ -546,7 +556,6 @@ struct Solver {
     }
 
 
-    std::mt19937_64 rng;
     Trellis trellis;
 };
 

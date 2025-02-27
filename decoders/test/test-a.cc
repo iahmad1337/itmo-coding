@@ -3,6 +3,8 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include <bitset>
+#include <fstream>
+#include <sstream>
 
 #include "../src/a.cc"
 
@@ -169,14 +171,106 @@ TEST(TestMatrix, TestMSF) {
     }
 }
 
+[[nodiscard]] std::string TrellisToDot(const Trellis& t) {
+    std::stringstream ss;
+
+    // Header
+    ss << R"(
+        strict digraph {
+            graph [
+                rankdir = LR
+            ]
+    )";
+
+    constexpr auto toLabel = [](u64 layer, u64 node) {
+        return "l" + std::to_string(layer) + "n" + std::to_string(node);
+    };
+
+    constexpr auto toNodeLabel = [](u64 node, u64 activeRowsCount) {
+        std::string result;
+        result.resize(activeRowsCount, '0');
+        for (u64 i = 0; node != 0; node >>= 1, i++) {
+            if (node & 1)
+                result[i] = '1';
+        }
+        if (activeRowsCount == 0) {
+            result = "sentinel";
+        }
+        result.insert(result.begin(), '"');
+        result.insert(result.end(), '"');
+        return result;
+    };
+
+    u64 layer = 1;
+    for (const auto& [nodes, activeRows, _] : t.layers) {
+        ss << "subgraph Layer" << layer << " {\n"
+            << "cluster=true;\n"
+            << "peripheries=0;\n"
+            << "label=\"" << activeRows << "\";\n"
+            << "rankdir=TB;\n";
+
+        // label nodes
+        for (u64 node = 0; node < nodes.size(); node++) {
+            ss << toLabel(layer, node) << " [label=" << toNodeLabel(node, activeRows.size()) << "];\n";
+        }
+
+        // subgraph footer
+        ss << "}\n";
+        layer++;
+    }
+
+    // draw edges
+    layer = 1;
+    for (const auto& [nodes, activeRows, _] : t.layers) {
+        for (u64 node = 0; node < nodes.size(); node++) {
+            const auto& n = nodes[node];
+            if (n.from[0] != NIL)
+                ss << toLabel(layer - 1, n.from[0]) << " -> " << toLabel(layer, node) << "[label=0,color=blue];\n";
+            if (n.from[1] != NIL)
+                ss << toLabel(layer - 1, n.from[1]) << " -> " << toLabel(layer, node) << "[label=1,color=red];\n";
+        }
+        layer++;
+    }
+
+    // Footer
+    ss << "}";
+    return ss.str();
+}
+
+void DisplayTrellis(const Trellis& t) {
+    auto dotContents = TrellisToDot(t);
+    std::ofstream of("trellis.dot");
+    of << dotContents << endl;
+    of.close();
+
+    system("dot -T png trellis.dot >trellis.png");
+    // Didn't work :(
+    // https://forum.graphviz.org/t/is-there-a-way-to-justify-align-nodes-on-the-same-rank/1494/4
+    // system("dot -Nrankjustify=l -Tdot trellis.dot | gvpr -cf rankJustify.gvpr | neato -n -Tpng >trellis.png");
+    system("open trellis.png");
+}
+
 TEST(TestMatrix, TestTrellis) {
     constexpr auto getProfile = [] (arg m) {
         auto g = FromString(m.m, m.rows, m.columns);
         auto trellis = Trellis::FromGeneratorMatrix(g);
+        DisplayTrellis(trellis);
+        exit(0);
         return trellis.GetComplexityProfile();
     };
 
     using namespace testing;
     EXPECT_THAT(getProfile(ms[0]), ElementsAre(1, 2, 4, 8, 4, 8, 4, 2, 1));
     // TODO: calculate complexity profiles for other matrices
+}
+
+TEST(TestDecode, SampleDecodeTest) {
+    Solver s = Solver::FromGeneratorMatrix(FromString(ms[0].m, ms[0].rows, ms[0].columns));
+    std::vector<double> y = {-1.0, 1.0, 1, 1, 1, 1, 1, 1.5};
+    auto result = s.Decode(y);
+    ASSERT_EQ(BitSpan(result).to_string(), "00000000");
+
+    y = {2, 2, 2, 2, 2, 2, 2, 2};
+    result = s.Decode(y);
+    ASSERT_EQ(BitSpan(result).to_string(), "11111111");
 }
