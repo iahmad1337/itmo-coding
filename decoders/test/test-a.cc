@@ -34,6 +34,17 @@ TEST(TestBitwise, TestPopcnt) {
     }
 }
 
+TEST(TestBitwise, TestBitParity) {
+    for (u64 i = 0; i < (1ull << 31); i++) {
+        std::bitset<64> bs{i};
+        ASSERT_EQ(bs.count() & 1, bit_parity(i));
+    }
+    for (u64 i = BIT(48); i < BIT(48) + BIT(31); i++) {
+        std::bitset<64> bs{i};
+        ASSERT_EQ(bs.count() & 1, bit_parity(i));
+    }
+}
+
 TEST(TestVector, TestBitSpan) {
     auto v = BitVector(255);
 
@@ -103,7 +114,10 @@ INSTANTIATE_TEST_SUITE_P(
     testing::Values(
         TSP{"101", "101", 0},
         TSP{"011", "111", 0},
-        TSP{"111", "111", 1}
+        TSP{"111", "111", 1},
+        TSP{"101", "010", 0},
+        TSP{"101", "111", 0},
+        TSP{"101", "110", 1}
     )
 );
 
@@ -260,7 +274,7 @@ TEST(TestMatrix, TestMSF) {
 
         // label nodes
         for (u64 node = 0; node < nodes.size(); node++) {
-            ss << toLabel(layer, node) << " [label=" << toNodeLabel(node, activeRows.size()) << "];\n";
+            ss << toLabel(layer, node) << " [label=" << toNodeLabel(node, activeRows.size()) << ", xlabel=" << nodes[node].metric_dp << "];\n";
         }
 
         // subgraph footer
@@ -306,14 +320,14 @@ void DisplayTrellis(const Trellis& t) {
     of.close();
 
     system("dot -T png trellis.dot >trellis.png");
-    system("open trellis.png");
+    system("open trellis.png || wslview trellis.png");
 }
 
 TEST(TestMatrix, TestTrellis) {
     constexpr auto getProfile = [] (arg m) {
         auto g = FromString(m.m, m.rows, m.columns);
         auto trellis = Trellis::FromGeneratorMatrix(g);
-        DisplayTrellis(trellis);
+        // DisplayTrellis(trellis);
         return trellis.GetComplexityProfile();
     };
 
@@ -323,12 +337,41 @@ TEST(TestMatrix, TestTrellis) {
 }
 
 TEST(TestDecode, SampleDecodeTest) {
+    // Hamming code
     Solver s = Solver::FromGeneratorMatrix(FromString(ms[0].m, ms[0].rows, ms[0].columns));
+
+    // sample from the statements
     std::vector<double> y = {-1.0, 1.0, 1, 1, 1, 1, 1, 1.5};
     auto result = s.Decode(y);
     ASSERT_EQ(BitSpan(result).to_string(), "00000000");
+    DisplayTrellis(s.trellis);
 
     y = {2, 2, 2, 2, 2, 2, 2, 2};
     result = s.Decode(y);
+    ASSERT_EQ(BitSpan(result).to_string(), "00000000");
+
+    y = {-1, -1, -1, -1, -1, -1, -1, -1};
+    result = s.Decode(y);
     ASSERT_EQ(BitSpan(result).to_string(), "11111111");
+
+    y = {-1, -1, -1, -1, 1, 1, 1, 1};
+    result = s.Decode(y);
+    ASSERT_EQ(BitSpan(result).to_string(), "11110000");
+
+    y = {1, 1, 1, 1, -1, -1, -1, -1};
+    result = s.Decode(y);
+    ASSERT_EQ(BitSpan(result).to_string(), "00001111");
+
+    y = {1, -1, 1, -1, 1, -1, 1, -1};
+    result = s.Decode(y);
+    ASSERT_EQ(BitSpan(result).to_string(), "01010101");
+
+    y = {-1, 1, -1, 1, 1, -1, 1, -1};
+    result = s.Decode(y);
+    ASSERT_EQ(BitSpan(result).to_string(), "10100101");
+}
+
+
+TEST(TestDecode, LectureSlidesDecodeTest) {
+    // TODO
 }

@@ -93,6 +93,19 @@ u64 popcnt(u64 limb) {
         + BitsSetTable256[p[7]];
 }
 
+bool bit_parity(u64 limb) {
+    // https://graphics.stanford.edu/~seander/bithacks.html#ParityParallel
+    limb = (limb >> 32) ^ limb;
+    limb = (limb >> 16) ^ limb;
+    limb = (limb >> 8) ^ limb;
+    limb = (limb >> 4) ^ limb;
+    limb &= 0xf;
+
+    // 110100110010110
+    // compacted parity table for [0;16)
+    return (0x6996 >> limb) & 1;
+}
+
 /// non-owning sequence of bits
 struct BitSpan {
     void set(u64 idx, bool value) {
@@ -172,7 +185,7 @@ struct BitSpan {
             lit++;
             rit++;
         }
-        return popcnt(result) & 1;
+        return bit_parity(result);
     }
 
     u64 *data;
@@ -493,7 +506,7 @@ struct Trellis {
                     auto& son = nextLayer.nodes[node.to[to]];
                     constexpr static double TO_SIGNAL[2] = {1, -1};
                     auto difference = TO_SIGNAL[to] - y[layer_idx];
-                    double suggestedMetric = node.metric_dp + difference * difference;
+                    double suggestedMetric = node.metric_dp + std::abs(difference * difference);
 
                     if (suggestedMetric < son.metric_dp) {
                         son.metric_dp = suggestedMetric;
