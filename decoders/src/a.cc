@@ -549,7 +549,15 @@ struct Trellis {
 struct Solver {
 
     [[nodiscard]] static Solver FromGeneratorMatrix(const BitMatrix& g) {
+        BitMatrix gT(/* rows = */ g.columns, /* columns = */ g.rows);
+        for (u64 i = 0; i < g.rows; i++) {
+            for (u64 j = 0; j < g.columns; j++) {
+                gT.set(j, i, g.get(i, j));
+            }
+        }
         return {
+            g,
+            gT,
             Trellis::FromGeneratorMatrix(g),
         };
     }
@@ -563,12 +571,25 @@ struct Solver {
         return trellis.Decode(y);
     }
 
-    [[nodiscard]] BitVector Encode(const BitVector& x) {
-        TODO("Solver::Encode");
-        return {0};
+    [[nodiscard]] BitVector Encode(const BitVector& x) const {
+        assert(x.bits == g.rows);
+        BitVector result{g.columns};
+        // gT.rows == g.columns
+        for (u64 i = 0; i < gT.rows; i++) {
+            BitSpan(result).set(
+                i,
+                BitSpan::ScalarProduct(
+                    const_cast<BitMatrix&>(gT).getRow(i),
+                    BitSpan(const_cast<BitVector&>(x))
+                )
+            );
+        }
+        return result;
     }
 
 
+    BitMatrix g;
+    BitMatrix gT;  // transposed version for faster Encode
     Trellis trellis;
 };
 

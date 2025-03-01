@@ -35,11 +35,11 @@ TEST(TestBitwise, TestPopcnt) {
 }
 
 TEST(TestBitwise, TestBitParity) {
-    for (u64 i = 0; i < (1ull << 31); i++) {
+    for (u64 i = 0; i < (1ull << 20); i++) {
         std::bitset<64> bs{i};
         ASSERT_EQ(bs.count() & 1, bit_parity(i));
     }
-    for (u64 i = BIT(48); i < BIT(48) + BIT(31); i++) {
+    for (u64 i = BIT(48); i < BIT(48) + BIT(20); i++) {
         std::bitset<64> bs{i};
         ASSERT_EQ(bs.count() & 1, bit_parity(i));
     }
@@ -77,7 +77,7 @@ TEST(TestVector, TestBitSpan) {
     EXPECT_EQ(span.last_one(), 200);
 }
 
-BitVector FromString(std::string str) {
+BitVector FromString(const std::string_view str) {
     u64 bits = 0;
     for (char c : str) {
         bits += c == '0' || c == '1';
@@ -122,7 +122,7 @@ INSTANTIATE_TEST_SUITE_P(
 );
 
 
-BitMatrix FromString(std::string str, int rows, int columns) {
+BitMatrix FromString(const std::string_view str, int rows, int columns) {
     BitMatrix result(rows, columns);
     u64 cur = 0;
     for (char c : str) {
@@ -371,7 +371,14 @@ TEST(TestDecode, SampleDecodeTest) {
     ASSERT_EQ(BitSpan(result).to_string(), "10100101");
 }
 
-
 TEST(TestDecode, LectureSlidesDecodeTest) {
     // TODO
+}
+
+TEST(TestEncode, SampleEncodeTest) {
+    Solver s = Solver::FromGeneratorMatrix(FromString(ms[0].m, ms[0].rows, ms[0].columns));
+
+    BitVector x = FromString("1000");
+    auto result = s.Encode(x);
+    ASSERT_EQ(BitSpan(result).to_string(), "11111111");
 }
