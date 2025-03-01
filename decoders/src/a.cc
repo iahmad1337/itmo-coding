@@ -39,6 +39,8 @@ using u64 = uint64_t;
 #define UPP(i) ((i) / 64)
 #define BIT(i) (1ull << (i))
 
+constexpr static double BIT_TO_SIGNAL[2] = {1, -1};
+
 void TODO(std::string message) {
     throw std::runtime_error("Not Implemented: " + message);
 }
@@ -205,6 +207,10 @@ struct BitVector {
     std::vector<u64> storage;
     u64 bits;
 };
+
+bool operator==(const BitVector& lhs, const BitVector& rhs) {
+    return lhs.bits == rhs.bits && lhs.storage == rhs.storage;
+}
 
 struct BitMatrix {
     BitMatrix(u64 rows, u64 columns) : rows{rows}, columns{columns}, stride{UPP(columns + 63)} {
@@ -464,14 +470,14 @@ struct Trellis {
                     for (u64 new_row_bit : {0, 1}) {
                         BitSpan(w).set(w.bits - 1, new_row_bit);
                         auto& node = t.layers[col].nodes[node_idx];
-                        debug(std::cout << "w=" << w << "\nx=" << x << "\nw^x=" << BitSpan::ScalarProduct(w, x) << endl)
+                        // debug(std::cout << "w=" << w << "\nx=" << x << "\nw^x=" << BitSpan::ScalarProduct(w, x) << endl)
                         node.to[(int)BitSpan::ScalarProduct(w, x)] =
                             destination_idx | BIT(t.layers[col + 1].activeRowToIdx[union_.back()]) * new_row_bit;
                     }
                 } else {
                     // active rows are the same or even lesser
                     auto& node = t.layers[col].nodes[node_idx];
-                    debug(std::cout << "w=" << w << "\nx=" << x << "\nw^x=" << BitSpan::ScalarProduct(w, x) << endl)
+                    // debug(std::cout << "w=" << w << "\nx=" << x << "\nw^x=" << BitSpan::ScalarProduct(w, x) << endl)
                     node.to[BitSpan::ScalarProduct(w, x)] = destination_idx;
                 }
             }
@@ -482,7 +488,8 @@ struct Trellis {
         return t;
     }
 
-    [[nodiscard]] BitVector Decode(const std::vector<double>& y) {
+    // NOTE: out-parameter to make this zero-allocation
+    void DecodeInplace(const std::vector<double>& y, BitVector& result) {
         // 1. Initialize trellis (from = NIL, metric = infty) TODO: infty or -infty?
         for (auto& layer : layers) {
             for (auto& node : layer.nodes) {
@@ -504,8 +511,7 @@ struct Trellis {
                     if (node.to[to] == NIL) continue;
 
                     auto& son = nextLayer.nodes[node.to[to]];
-                    constexpr static double TO_SIGNAL[2] = {1, -1};
-                    auto difference = TO_SIGNAL[to] - y[layer_idx];
+                    auto difference = BIT_TO_SIGNAL[to] - y[layer_idx];
                     double suggestedMetric = node.metric_dp + std::abs(difference * difference);
 
                     if (suggestedMetric < son.metric_dp) {
@@ -518,14 +524,11 @@ struct Trellis {
         }
 
         // 3. Backtrack the answer
-        BitVector answer(msf.columns);
         for (u64 layer_idx = layers.size() - 1, node_idx = 0; layer_idx != 0; layer_idx--) {
             auto& node = layers[layer_idx].nodes[node_idx];
-            BitSpan(answer).set(layer_idx - 1, node.parent_label_dp);
+            BitSpan(result).set(layer_idx - 1, node.parent_label_dp);
             node_idx = node.parent_idx;
         }
-
-        return answer;
     }
 
     [[nodiscard]] static Trellis FromGeneratorMatrix(const BitMatrix& m) {
@@ -562,21 +565,70 @@ struct Solver {
         };
     }
 
-    [[nodiscard]] double Simulate(double noiseLevel, u64 iterations, u64 maxErrors) {
-        TODO("Solver::Simulate");
-        return 0;
+    [[nodiscard]] double Simulate(const double noiseLevel, const u64 iterations, const u64 maxErrors) {
+        // See Lecture 1 slide 11 (alpha = 1)
+        // sigma^2 := N0 / 2
+        // OSW := 10 log_10{Eb/N0}  -- Otnosheniye Signal Wum na bit
+        //
+        // 10^{OSW/10} = Eb / N0
+        // N0 = Eb / 10^{OSW/10}
+        // sigma^2 = 0.5 * Eb / 10 ^ {OSW/10}
+        // Eb := Es / R = Es / (k / n)
+        // Es := alpha^2 = 1
+        // Eb = 1 / (k / n) = n / k
+        //
+        // OSW = noiseLevel
+        // sigma^2 = 0.5 * (n/k) / 10 ^ {noiseLevel / 10}
+        const double N = g.columns;
+        const double K = g.rows;
+        std::normal_distribution<double> noiser(0, std::sqrt(0.5 * N / K / std::pow(10, noiseLevel / 10)));
+        std::bernoulli_distribution coin(0.5);
+
+        BitVector generatedVector(K);
+        BitVector encodedVector(N);
+        BitVector decodedVector(N);
+        std::vector<double> noisedVector(N);
+
+        u64 errors = 0;
+        u64 actualIterations = 0;
+
+        for (actualIterations = 0; actualIterations < iterations && errors < maxErrors; actualIterations++) {
+            for (u64 i = 0; i < generatedVector.bits; i++)
+                BitSpan(generatedVector).set(i, coin(gen));
+
+            EncodeInplace(generatedVector, encodedVector);
+
+            for (u64 i = 0; i < encodedVector.bits; i++) {
+                noisedVector[i] = BIT_TO_SIGNAL[BitSpan(encodedVector).get(i)] + noiser(gen);
+            }
+
+            trellis.DecodeInplace(noisedVector, decodedVector);
+
+            errors += !(encodedVector == decodedVector);
+        }
+
+        debug(std::cout << "Simulate: errors=" << errors << " iterations=" << actualIterations << endl);
+        return double(errors) / actualIterations;
     }
 
     [[nodiscard]] BitVector Decode(const std::vector<double>& y) {
-        return trellis.Decode(y);
+        BitVector result(g.columns);
+        trellis.DecodeInplace(y, result);
+        return result;
     }
 
     [[nodiscard]] BitVector Encode(const BitVector& x) const {
-        assert(x.bits == g.rows);
         BitVector result{g.columns};
+        EncodeInplace(x, result);
+        return result;
+    }
+
+    /// Make less allocations in case of frequent encoding
+    void EncodeInplace(const BitVector& x, BitVector& out) const {
+        assert(x.bits == g.rows);
         // gT.rows == g.columns
         for (u64 i = 0; i < gT.rows; i++) {
-            BitSpan(result).set(
+            BitSpan(out).set(
                 i,
                 BitSpan::ScalarProduct(
                     const_cast<BitMatrix&>(gT).getRow(i),
@@ -584,13 +636,13 @@ struct Solver {
                 )
             );
         }
-        return result;
     }
 
 
     BitMatrix g;
     BitMatrix gT;  // transposed version for faster Encode
     Trellis trellis;
+    std::mt19937_64 gen;
 };
 
 #ifndef TEST

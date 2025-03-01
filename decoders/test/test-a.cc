@@ -344,7 +344,9 @@ TEST(TestDecode, SampleDecodeTest) {
     std::vector<double> y = {-1.0, 1.0, 1, 1, 1, 1, 1, 1.5};
     auto result = s.Decode(y);
     ASSERT_EQ(BitSpan(result).to_string(), "00000000");
-    DisplayTrellis(s.trellis);
+    if (getenv("DISPLAY") != nullptr) {
+        DisplayTrellis(s.trellis);
+    }
 
     y = {2, 2, 2, 2, 2, 2, 2, 2};
     result = s.Decode(y);
@@ -381,4 +383,31 @@ TEST(TestEncode, SampleEncodeTest) {
     BitVector x = FromString("1000");
     auto result = s.Encode(x);
     ASSERT_EQ(BitSpan(result).to_string(), "11111111");
+
+    x = FromString("0100");
+    result = s.Encode(x);
+    ASSERT_EQ(BitSpan(result).to_string(), "11110000");
+
+    x = FromString("0010");
+    result = s.Encode(x);
+    ASSERT_EQ(BitSpan(result).to_string(), "11001100");
+
+    x = FromString("0001");
+    result = s.Encode(x);
+    ASSERT_EQ(BitSpan(result).to_string(), "10101010");
+
+    x = FromString("1001");
+    result = s.Encode(x);
+    ASSERT_EQ(BitSpan(result).to_string(), "01010101");
+
+    x = FromString("0000");
+    result = s.Encode(x);
+    ASSERT_EQ(BitSpan(result).to_string(), "00000000");
+}
+
+TEST(TestSimulate, SampleSimulateTest) {
+    Solver s = Solver::FromGeneratorMatrix(FromString(ms[0].m, ms[0].rows, ms[0].columns));
+
+    EXPECT_NEAR(s.Simulate(3, 100000, 100), 0.0256, /* abs_error= */ 0.005);
+    EXPECT_NEAR(s.Simulate(4, 100000, 100), 0.00931, /* abs_error= */ 0.0025);
 }
