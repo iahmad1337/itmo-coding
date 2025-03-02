@@ -20,10 +20,22 @@ test_bin() {
     ./$1 && echo "**** $1: SUCCESS ****" || err "**** $1: FAILURE ****"
 }
 
+test_a() {
+    test_bin test-a  || err "Unit tests on A failed"
+
+    for input_file in ../test/a-input*; do
+        cp "$input_file" ./input.txt
+        echo "testing on $input_file"
+        test_bin a
+        echo "output.txt:"
+        cat output.txt
+    done || err "E2E test failed on A"
+}
+
 (
     cd build
     cmake --build . || err "Build failed!"
 
-    test_bin test-a
+    test_a
 ) && echo SUCCESS || echo FAILURE
 

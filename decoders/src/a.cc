@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <random>
 #include <cmath>
+#include <cstdio>
 
 #if defined(__x86_64__)
 #include <x86intrin.h>
@@ -107,6 +108,10 @@ bool bit_parity(u64 limb) {
     // compacted parity table for [0;16)
     return (0x6996 >> limb) & 1;
 }
+
+/*******************************************************************************
+*                       BitSpan, BitVector & BitMatrix                        *
+*******************************************************************************/
 
 /// non-owning sequence of bits
 struct BitSpan {
@@ -379,8 +384,8 @@ struct Trellis {
         };
         std::vector<ActiveRange> activeRange;
         activeRange.reserve(m.rows);
-        for (u64 row_idx = 0; row_idx < m.rows; row_idx++) {
-            auto rowSpan = const_cast<BitMatrix&>(m).getRow(row_idx);
+        for (u64 rowIdx = 0; rowIdx < m.rows; rowIdx++) {
+            auto rowSpan = const_cast<BitMatrix&>(m).getRow(rowIdx);
             activeRange.push_back(
                 ActiveRange{
                     /* b = */ *rowSpan.first_one(),
@@ -389,10 +394,10 @@ struct Trellis {
             );
         }
 
-        for (u64 layer_idx = 0; layer_idx < N; layer_idx++) {
+        for (u64 layerIdx = 0; layerIdx < N; layerIdx++) {
             std::vector<u64> activeRows;
             for (u64 row = 0; row < activeRange.size(); row++) {
-                if (activeRange[row].b <= layer_idx && layer_idx < activeRange[row].e) {
+                if (activeRange[row].b <= layerIdx && layerIdx < activeRange[row].e) {
                     activeRows.push_back(row);
                 }
             }
@@ -432,32 +437,32 @@ struct Trellis {
             BitVector x{union_.size()};
 
             // Fill up `w` with matrix values
-            for (u64 active_row_idx = 0; active_row_idx < union_.size(); active_row_idx++) {
-                BitSpan(x).set(active_row_idx, m.get(union_[active_row_idx], col));
+            for (u64 activeRowIdx = 0; activeRowIdx < union_.size(); activeRowIdx++) {
+                BitSpan(x).set(activeRowIdx, m.get(union_[activeRowIdx], col));
             }
 
             for (u64 node_idx = 0; node_idx < t.layers[col].nodes.size(); node_idx++) {
-                u64 destination_idx = 0;
-                for (u64 active_row_idx = 0; active_row_idx < t.layers[col].activeRows.size(); active_row_idx++) {
-                    bool isActiveRowSet = (node_idx & BIT(active_row_idx)) != 0;
+                u64 destinationIdx = 0;
+                for (u64 activeRowIdx = 0; activeRowIdx < t.layers[col].activeRows.size(); activeRowIdx++) {
+                    bool isActiveRowSet = (node_idx & BIT(activeRowIdx)) != 0;
                     // store union of active rows into `w`
-                    BitSpan(w).set(active_row_idx, isActiveRowSet);
-                    // build common part of destination_idx
+                    BitSpan(w).set(activeRowIdx, isActiveRowSet);
+                    // build common part of destinationIdx
                     auto& prevLayer = t.layers[col];
                     auto& nextLayer = t.layers[col + 1];
                     if (
-                        auto it = nextLayer.activeRowToIdx.find(prevLayer.activeRows[active_row_idx]);
+                        auto it = nextLayer.activeRowToIdx.find(prevLayer.activeRows[activeRowIdx]);
                         it != nextLayer.activeRowToIdx.end()
                     ) {
                         // it->second == position of the active row in the next
                         // layer
-                        destination_idx |= BIT(it->second) * isActiveRowSet;
+                        destinationIdx |= BIT(it->second) * isActiveRowSet;
                     }
                 }
 
                 // debug(
                 //     std::cout
-                //     << "destination_idx=" << destination_idx << endl
+                //     << "destinationIdx=" << destinationIdx << endl
                 //     << "union_=" << union_ << endl
                 // )
                 if (union_.size() > t.layers[col].activeRows.size()) {
@@ -472,13 +477,13 @@ struct Trellis {
                         auto& node = t.layers[col].nodes[node_idx];
                         // debug(std::cout << "w=" << w << "\nx=" << x << "\nw^x=" << BitSpan::ScalarProduct(w, x) << endl)
                         node.to[(int)BitSpan::ScalarProduct(w, x)] =
-                            destination_idx | BIT(t.layers[col + 1].activeRowToIdx[union_.back()]) * new_row_bit;
+                            destinationIdx | BIT(t.layers[col + 1].activeRowToIdx[union_.back()]) * new_row_bit;
                     }
                 } else {
                     // active rows are the same or even lesser
                     auto& node = t.layers[col].nodes[node_idx];
                     // debug(std::cout << "w=" << w << "\nx=" << x << "\nw^x=" << BitSpan::ScalarProduct(w, x) << endl)
-                    node.to[BitSpan::ScalarProduct(w, x)] = destination_idx;
+                    node.to[BitSpan::ScalarProduct(w, x)] = destinationIdx;
                 }
             }
 
@@ -501,9 +506,9 @@ struct Trellis {
 
         // 2. Do the DP
         layers[0].nodes[0].metric_dp = 0;
-        for (u64 layer_idx = 0; layer_idx + 1 < layers.size(); layer_idx++) {
-            auto& curLayer = layers[layer_idx];
-            auto& nextLayer = layers[layer_idx + 1];
+        for (u64 layerIdx = 0; layerIdx + 1 < layers.size(); layerIdx++) {
+            auto& curLayer = layers[layerIdx];
+            auto& nextLayer = layers[layerIdx + 1];
 
             for (u64 node_idx = 0; node_idx < curLayer.nodes.size(); node_idx++) {
                 auto& node = curLayer.nodes[node_idx];
@@ -511,7 +516,7 @@ struct Trellis {
                     if (node.to[to] == NIL) continue;
 
                     auto& son = nextLayer.nodes[node.to[to]];
-                    auto difference = BIT_TO_SIGNAL[to] - y[layer_idx];
+                    auto difference = BIT_TO_SIGNAL[to] - y[layerIdx];
                     double suggestedMetric = node.metric_dp + std::abs(difference * difference);
 
                     if (suggestedMetric < son.metric_dp) {
@@ -524,10 +529,10 @@ struct Trellis {
         }
 
         // 3. Backtrack the answer
-        for (u64 layer_idx = layers.size() - 1, node_idx = 0; layer_idx != 0; layer_idx--) {
-            auto& node = layers[layer_idx].nodes[node_idx];
-            BitSpan(result).set(layer_idx - 1, node.parent_label_dp);
-            node_idx = node.parent_idx;
+        for (u64 layerIdx = layers.size() - 1, nodeIdx = 0; layerIdx != 0; layerIdx--) {
+            auto& node = layers[layerIdx].nodes[nodeIdx];
+            BitSpan(result).set(layerIdx - 1, node.parent_label_dp);
+            nodeIdx = node.parent_idx;
         }
     }
 
@@ -548,6 +553,10 @@ struct Trellis {
     const BitMatrix msf;
     std::vector<Layer> layers;
 };
+
+/*******************************************************************************
+*                         Solver (Encode + Simulate)                          *
+*******************************************************************************/
 
 struct Solver {
 
@@ -649,6 +658,60 @@ struct Solver {
 int main() {
     std::ios_base::sync_with_stdio(false);
     std::cin.tie(nullptr);
+
+    std::freopen("input.txt", "r", stdin);
+    std::freopen("output.txt", "w", stdout);
+
+    u64 n, k;
+    cin >> n >> k;
+    BitMatrix g(k, n);
+    for (u64 i = 0; i < k; i++) {
+        for (u64 j = 0; j < n; j++) {
+            bool c;
+            cin >> c;
+            g.set(i, j, c);
+        }
+    }
+
+    Solver solver = Solver::FromGeneratorMatrix(g);
+
+    std::string command;
+    BitVector toEncodeVector(k);
+    BitVector encodedVector(n);
+    std::vector<double> toDecodeVector(n);
+    while (std::cin >> command) {
+        if (command.empty()) break;
+
+        if (command == "Encode") {
+            for (u64 i = 0; i < k; i++) {
+                bool vi;
+                cin >> vi;
+                BitSpan(toEncodeVector).set(i, vi);
+            }
+            solver.EncodeInplace(toEncodeVector, encodedVector);
+
+            for (u64 i = 0; i < n; i++) {
+                cout << int(BitSpan(encodedVector).get(i)) << " ";
+            }
+            cout << endl;
+        } else if (command == "Decode") {
+            for (auto& v : toDecodeVector) cin >> v;
+            auto result = solver.Decode(toDecodeVector);
+            assert(result.bits == n);
+
+            for (u64 i = 0; i < result.bits; i++) {
+                cout << int(BitSpan(result).get(i)) << " ";
+            }
+            cout << endl;
+        } else {
+            assert(command == "Simulate");
+            double noiseLevel;
+            u64 iterations;
+            u64 maxErrors;
+            cin >> noiseLevel >> iterations >> maxErrors;
+            cout << solver.Simulate(noiseLevel, iterations, maxErrors) << endl;
+        }
+    }
 
     return 0;
 }

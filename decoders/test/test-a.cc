@@ -77,6 +77,10 @@ TEST(TestVector, TestBitSpan) {
     EXPECT_EQ(span.last_one(), 200);
 }
 
+class TestScalarProduct : public testing::TestWithParam<std::tuple<std::string, std::string, int>> {};
+
+using TSP = std::tuple<std::string, std::string, int>;
+
 BitVector FromString(const std::string_view str) {
     u64 bits = 0;
     for (char c : str) {
@@ -95,9 +99,21 @@ BitVector FromString(const std::string_view str) {
     return result;
 }
 
-class TestScalarProduct : public testing::TestWithParam<std::tuple<std::string, std::string, int>> {};
-
-using TSP = std::tuple<std::string, std::string, int>;
+BitMatrix FromString(const std::string_view str, int rows, int columns) {
+    BitMatrix result(rows, columns);
+    u64 cur = 0;
+    for (char c : str) {
+        bool value = false;
+        if (c == '0') value = false;
+        else if (c == '1') value = true;
+        else continue;
+        auto i = cur / columns;
+        auto j = cur % columns;
+        result.set(i, j, value);
+        cur++;
+    }
+    return result;
+}
 
 TEST_P(TestScalarProduct, Valid) {
     auto [x, y, result] = GetParam();
@@ -120,23 +136,6 @@ INSTANTIATE_TEST_SUITE_P(
         TSP{"101", "110", 1}
     )
 );
-
-
-BitMatrix FromString(const std::string_view str, int rows, int columns) {
-    BitMatrix result(rows, columns);
-    u64 cur = 0;
-    for (char c : str) {
-        bool value = false;
-        if (c == '0') value = false;
-        else if (c == '1') value = true;
-        else continue;
-        auto i = cur / columns;
-        auto j = cur % columns;
-        result.set(i, j, value);
-        cur++;
-    }
-    return result;
-}
 
 std::string ToString(const BitMatrix& m) {
     std::stringstream ss;
@@ -274,7 +273,9 @@ TEST(TestMatrix, TestMSF) {
 
         // label nodes
         for (u64 node = 0; node < nodes.size(); node++) {
-            ss << toLabel(layer, node) << " [label=" << toNodeLabel(node, activeRows.size()) << ", xlabel=" << nodes[node].metric_dp << "];\n";
+            ss << toLabel(layer, node) << " [label=" << toNodeLabel(node, activeRows.size());
+            if (nodes[node].metric_dp != INFTY) ss << ", xlabel=" << nodes[node].metric_dp;
+            ss << "];\n";
         }
 
         // subgraph footer
