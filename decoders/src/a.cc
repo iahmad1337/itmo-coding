@@ -8,6 +8,10 @@
 #include <random>
 #include <cmath>
 #include <cstdio>
+#include <unordered_map>
+#include <string>
+#include <limits>
+#include <utility>
 
 #if defined(__x86_64__)
 #include <x86intrin.h>
@@ -675,6 +679,13 @@ int main() {
 
     Solver solver = Solver::FromGeneratorMatrix(g);
 
+    // 1. print the profile
+    for (auto& v :solver.trellis.layers) {
+        cout << v.nodes.size() << " ";
+    }
+    cout << endl;
+
+    // 2. process the queries
     std::string command;
     BitVector toEncodeVector(k);
     BitVector encodedVector(n);
