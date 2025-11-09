@@ -345,7 +345,7 @@ TEST(TestDecode, SampleDecodeTest) {
     std::vector<double> y = {-1.0, 1.0, 1, 1, 1, 1, 1, 1.5};
     auto result = s.Decode(y);
     ASSERT_EQ(BitSpan(result).to_string(), "00000000");
-    if (getenv("DISPLAY") != nullptr) {
+    if (getenv("DISPLAY_TRELLIS") != nullptr) {
         DisplayTrellis(s.trellis);
     }
 
@@ -411,4 +411,69 @@ TEST(TestSimulate, SampleSimulateTest) {
 
     EXPECT_NEAR(s.Simulate(3, 100000, 100), 0.0256, /* abs_error= */ 0.005);
     EXPECT_NEAR(s.Simulate(4, 100000, 100), 0.00931, /* abs_error= */ 0.0025);
+}
+
+
+TEST(TestViterbiRz, TestViterbiRz2024) {
+    arg matrix = {
+        R"(
+        1000001001000111
+        1010100010000110
+        1010001000010100
+        1011000000001010
+        0001100100000011
+        0011001000100011
+        0111100000000101
+        1010111000000011
+        )",
+        8, 16
+    };
+
+    Solver s = Solver::FromGeneratorMatrix(FromString(matrix.m, matrix.rows, matrix.columns));
+
+    // 0 -> 1
+    // 1 -> -1
+    std::vector<double> y = {-1, -1, 1, 1, -1, -1, -1, 1, -1, -1, 1, 1, 1, -1, -1, 1};
+    // DisplayTrellis(s.trellis);
+
+    auto result = s.Decode(y);
+    std::cout << BitSpan(result).to_string() << std::endl;
+    auto profile = s.trellis.GetComplexityProfile();
+    std::cout << "Complexity profile: ";
+    for (auto v : profile) {
+        std::cout << std::log2(v) << " ";
+    }
+    std::cout << std::endl;
+}
+
+TEST(TestViterbiRz, TestViterbiRz2025) {
+    arg matrix = {
+        R"(
+        1000001100101001
+        1100010000001101
+        1101000100000001
+        0100000010011001
+        0000010010101010
+        0100100110101000
+        1100010011100000
+        0110010100101001
+        )",
+        8, 16
+    };
+
+    Solver s = Solver::FromGeneratorMatrix(FromString(matrix.m, matrix.rows, matrix.columns));
+
+    // 0 -> 1
+    // 1 -> -1
+    std::vector<double> y = {1, 1, -1, 1, 1, 1, 1, -1, -1, -1, -1, -1, 1, -1, -1, 1};
+    // DisplayTrellis(s.trellis);
+
+    auto result = s.Decode(y);
+    std::cout << BitSpan(result).to_string() << std::endl;
+    auto profile = s.trellis.GetComplexityProfile();
+    std::cout << "Complexity profile: ";
+    for (auto v : profile) {
+        std::cout << std::log2(v) << " ";
+    }
+    std::cout << std::endl;
 }
